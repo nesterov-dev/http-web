@@ -1,55 +1,88 @@
-import java.io.BufferedOutputStream;
-import java.io.IOException;
+import handler.Handler;
+import server.Server;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
 
 public class Main {
     public static void main(String[] args) {
-        int poolSizeThreads = 64;
-        int port = 9999;
-        Server server = new Server(port, poolSizeThreads);
+        Server server = new Server();
 
-        // код инициализации сервера (из вашего предыдущего ДЗ)
-
-        // добавление хендлеров (обработчиков)
-        Handler handler = new Handler() {
-            @Override
-            public void handle(Request request, BufferedOutputStream out) {
-                try {
-                    if (request.getPath().equals("/classic.html")) {
-                        final var template = Files.readString(request.getFilePath());
-                        final var content = template.replace(
-                                "{time}",
-                                LocalDateTime.now().toString()
-                        ).getBytes();
-                        out.write((
-                                "HTTP/1.1 200 OK\r\n" +
-                                        "Content-Type: " + request.getMimeType() + "\r\n" +
-                                        "Content-Length: " + content.length + "\r\n" +
-                                        "Connection: close\r\n" +
-                                        "\r\n"
-                        ).getBytes());
-                        out.write(content);
-                        out.flush();
-                        return;
-                    }
-
-                    out.write((
-                            "HTTP/1.1 200 OK\r\n" +
-                                    "Content-Type: " + request.getMimeType() + "\r\n" +
-                                    "Content-Length: " + request.getLenght() + "\r\n" +
-                                    "Connection: close\r\n" +
-                                    "\r\n"
-                    ).getBytes());
-                    Files.copy(request.getFilePath(), out);
-                    out.flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+        Handler defaultHandler = (request, responseStream) -> {
+            final var filePath = Path.of(".", "public", request.getPath());
+            final var mimeType = Files.probeContentType(filePath);
+            final var length = Files.size(filePath);
+            responseStream.write((
+                    "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: " + mimeType + "\r\n" +
+                            "Content-Length: " + length + "\r\n" +
+                            "Connection: close\r\n" +
+                            "\r\n"
+            ).getBytes());
+            Files.copy(filePath, responseStream);
+            responseStream.flush();
         };
+        server.addHandler("GET", "/app.js", defaultHandler);
+        server.addHandler("GET", "/events.html", defaultHandler);
+        server.addHandler("GET", "/events.js", defaultHandler);
+        server.addHandler("GET", "/index.html", defaultHandler);
+        server.addHandler("GET", "/links.html", defaultHandler);
+        server.addHandler("GET", "/resources.html", defaultHandler);
+        server.addHandler("GET", "/spring.png", defaultHandler);
+        server.addHandler("GET", "/spring.svg", defaultHandler);
+        server.addHandler("GET", "/styles.css", defaultHandler);
+        server.addHandler("GET", "/classic.html", (request, responseStream) -> {
+            final var filePath = Path.of(".", "public", request.getPath());
+            final var mimeType = Files.probeContentType(filePath);
+            final var template = Files.readString(filePath);
+            final var content = template.replace("{time}", LocalDateTime.now().toString()).getBytes();
+            responseStream.write((
+                    "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: " + mimeType + "\r\n" +
+                            "Content-Length: " + content.length + "\r\n" +
+                            "Connection: close\r\n" +
+                            "\r\n"
+            ).getBytes());
+            responseStream.write(content);
+            responseStream.flush();
+        });
 
-        server.addHandler("GET", "/index.html", handler);
-        server.addHandler("GET", "/classic.html", handler);
 
-        server.start();
+        server.addHandler("GET", "/postman", ((request, responseStream) -> {
+            responseStream.write((
+                    """
+                            HTTP/1.1 200 OK\r
+                            Content-Length: 0\r
+                            Connection: close\r
+                            \r
+                            """
+            ).getBytes());
+            responseStream.flush();
+        }));
+
+        server.addHandler("POST", "/postman", ((request, responseStream) -> {
+            responseStream.write(("""
+                    HTTP/1.1 200 OK\r
+                    Content-Length: 0\r
+                    Connection: close\r
+                    \r
+                    """
+            ).getBytes());
+            responseStream.flush();
+        }));
+
+        server.addHandler("POST", "/postman?name=ella&surname=schonau", ((request, responseStream) -> {
+            responseStream.write(("""
+                    HTTP/1.1 200 OK\r
+                    Content-Length: 0\r
+                    Connection: close\r
+                    \r
+                    """
+            ).getBytes());
+            responseStream.flush();
+        }));
+
+        server.launch(9999);
     }
 }
